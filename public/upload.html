@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Upload - sp_meta_search (JS v3)</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header>
+  <h1>Meta Sök</h1>
+  <nav>
+    <a href="/search.html">Sök</a>
+    <a href="/upload.html">Ladda upp filer</a> 
+    <a href="/import.html">Importera metadata till databasen</a> 
+  </nav>
+</header>
+<main class="container">
+  <h2>Ladda upp filer</h2>
+  <div class="row">
+    <label>Type:</label>
+    <select id="type">
+      <option value="image">Image</option>
+      <option value="pdf">PDF</option>
+      <option value="ppt">PPT</option>
+      <option value="music">Music</option>
+    </select>
+  </div>
+  <div id="drop" class="drop">Släpp filer här eller klicka för att välja…</div>
+  <input type="file" id="file" multiple style="display:none">
+  <button id="send">Upload</button>
+  <pre id="log"></pre>
+</main>
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+drop.addEventListener('click', ()=> fileInput.click());
+drop.addEventListener('dragover', e=>{e.preventDefault(); drop.classList.add('drag');});
+drop.addEventListener('dragleave', ()=> drop.classList.remove('drag'));
+drop.addEventListener('drop', e=>{
+  e.preventDefault(); drop.classList.remove('drag');
+  fileInput.files = e.dataTransfer.files;
+  drop.textContent = fileInput.files.length + ' filer valda';
+});
+fileInput.addEventListener('change', ()=>{
+  drop.textContent = fileInput.files.length + ' filer valda';
+});
+document.getElementById('send').addEventListener('click', async ()=>{
+  const type = document.getElementById('type').value;
+  if(!fileInput.files.length){ alert('Välj minst en fil'); return; }
+  const fd = new FormData();
+  for(const f of fileInput.files) fd.append('file', f);
+  fd.append('type', type);
+  const r = await fetch('/api/upload', { method:'POST', body: fd });
+  const d = await r.json();
+  document.getElementById('log').textContent = JSON.stringify(d,null,2);
+});
+</script>
+</body>
+</html>

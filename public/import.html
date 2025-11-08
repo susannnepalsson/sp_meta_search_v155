@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Meta File Search</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header>
+  <h1>Meta Sök</h1>
+  <nav>
+    <a href="/search.html">Sök</a>
+    <a href="/upload.html">Ladda upp filer</a>
+    <a href="/import.html">Importera metadata till databasen</a>
+  </nav>
+</header>
+
+<main class="container">
+  <h2>Importera metadata till databasen</h2>
+  <p>Skannar <code>meta_files/</code> och importerar metadata till MySQL.</p>
+
+  <!-- Knapparna för import och stoppa import -->
+  <div>
+    <button id="run">Run Import</button>
+    <button id="abort" disabled>Stoppa import</button>
+  </div>
+
+  <pre id="log" aria-live="polite" style="max-height:280px;overflow:auto;"></pre>
+
+  <section class="card" style="padding:12px;margin:12px 0;">
+    <h2>Filer som kommer att bearbetas</h2>
+    <div id="counts">
+      <div>Images: <strong id="c_images">0</strong></div>
+      <div>PDF: <strong id="c_pdfs">0</strong></div>
+      <div>PPT: <strong id="c_ppts">0</strong></div>
+      <div>Music: <strong id="c_music">0</strong></div>
+      <div>Totalt: <strong id="c_total">0</strong></div>
+    </div>
+    <button id="refreshCounts">Räkna filer</button>
+  </section>
+
+  <section class="card" style="padding:12px;margin:12px 0;">
+    <h3>Förlopp per kategori</h3>
+    <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:720px;">
+      <div>
+        <div>Images: <span id="catImagesPct">0%</span>
+          <small>(<span id="catImagesIns">0</span> ins, <span id="catImagesUpd">0</span> upd, <span id="catImagesSkp">0</span> skp)</small>
+        </div>
+        <progress id="catImagesBar" value="0" max="1" style="width:100%;height:12px;"></progress>
+      </div>
+      <div>
+        <div>PDFs: <span id="catPdfsPct">0%</span>
+          <small>(<span id="catPdfsIns">0</span> ins, <span id="catPdfsUpd">0</span> upd, <span id="catPdfsSkp">0</span> skp)</small>
+        </div>
+        <progress id="catPdfsBar" value="0" max="1" style="width:100%;height:12px;"></progress>
+      </div>
+      <div>
+        <div>PPTs: <span id="catPptsPct">0%</span>
+          <small>(<span id="catPptsIns">0</span> ins, <span id="catPptsUpd">0</span> upd, <span id="catPptsSkp">0</span> skp)</small>
+        </div>
+        <progress id="catPptsBar" value="0" max="1" style="width:100%;height:12px;"></progress>
+      </div>
+      <div>
+        <div>Music: <span id="catMusicPct">0%</span>
+          <small>(<span id="catMusicIns">0</span> ins, <span id="catMusicUpd">0</span> upd, <span id="catMusicSkp">0</span> skp)</small>
+        </div>
+        <progress id="catMusicBar" value="0" max="1" style="width:100%;height:12px;"></progress>
+      </div>
+    </div>
+    <div id="etaBox" style="margin-top:8px;font-family:ui-monospace,Consolas,monospace;"></div>
+  </section>
+</main>
+
+<!-- Starta importen -->
+<script>
+document.getElementById('run').addEventListener('click', async ()=>{
+  try{
+    // abort & logg   
+    document.getElementById('abort').disabled = false;
+    document.getElementById('log').textContent = '';
+
+    // Säkerställ anslutningen
+    if (window.__attachSSE) window.__attachSSE();
+
+    const r = await fetch('/api/import/run', {method:'POST'});
+    const d = await r.json();
+    log(`[API] ${JSON.stringify(d)}`);
+  }catch(e){
+    log('Kunde inte starta import: ' + e.message);
+  }
+});
+
+document.getElementById('abort').addEventListener('click', async ()=>{
+  try{
+    document.getElementById('abort').disabled = true;
+    const r = await fetch('/api/import/abort', { method:'POST' });
+    const d = await r.json();
+    log(`[Abort] ${JSON.stringify(d)}`);
+  }catch(e){
+    log('Abort misslyckades: ' + e.message);
+  }
+});
+
+function log(msg){
+  const box = document.getElementById('log');
+  const ts = new Date().toLocaleTimeString();
+  box.textContent += `[${ts}] ${msg}\n`;
+  box.scrollTop = box.scrollHeight;
+}
+</script>
+
+<!-- Räkna filer -->
+<script>
+document.addEventListener('DOMContentLoaded', ()=>{
+  async function loadCounts(){
+    try{
+      const r = await fetch('/api/import/count');
+      const data = await r.json();
+      const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent = v ?? 0; };
+      set('c_images', data.images);
+      set('c_pdfs', data.pdfs);
+      set('c_ppts', data.ppts);
+      set('c_music', data.music);
+      set('c_total', data.total);
+    }catch(e){ console.warn('Failed to load counts', e); }
+  }
+  const btn = document.getElementById('refreshCounts');
+  if (btn) btn.addEventListener('click', loadCounts);
+  loadCounts();
+});
+</script>
+
+<!-- Progresskörning per kategori -->
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const cat = {
+    bar: { images: $('catImagesBar'), pdfs: $('catPdfsBar'), ppts: $('catPptsBar'), music: $('catMusicBar') },
+    pct: { images: $('catImagesPct'), pdfs: $('catPdfsPct'), ppts: $('catPptsPct'), music: $('catMusicPct') },
+    ins: { images: $('catImagesIns'), pdfs: $('catPdfsIns'), ppts: $('catPptsIns'), music: $('catMusicIns') },
+    upd: { images: $('catPptsUpd') ? null : $('catImagesUpd'), pdfs: $('catPdfsUpd'), ppts: $('catPptsUpd'), music: $('catMusicUpd') }, // fallback säkerhet
+    skp: { images: $('catImagesSkp'), pdfs: $('catPdfsSkp'), ppts: $('catPptsSkp'), music: $('catMusicSkp') }
+  };
+  // Fallback om null
+  cat.upd.images = $('catImagesUpd');
+
+  const perTotals = { images: 0, pdfs: 0, ppts: 0, music: 0 };
+
+  function updateETA(metrics){
+    const el = $('etaBox'); if (!el) return;
+    if (!metrics) { el.textContent = ''; return; }
+    const sec = (s)=> s==null ? '—' : `${s}s`;
+    const spd = metrics.speedPerSec ? metrics.speedPerSec.toFixed(1) : '0.0';
+    const overall = `Tempo: ${spd} filer/s  |  ETA (total): ${sec(metrics.etaSecOverall)}`;
+    const per = ['images','pdfs','ppts','music'].map(k=>{
+      const m = metrics.perType?.[k] || {};
+      return `${k}: ${m.percent ?? 0}% ETA ${sec(m.etaSec)}`;
+    }).join('   ');
+    el.textContent = `${overall}\n${per}`;
+  }
+
+  function updateCatProgress(perDone, perResult) {
+    if (!perDone) return;
+    ['images','pdfs','ppts','music'].forEach(k => {
+      const tot = perTotals[k] || 0;
+      const done = perDone[k] || 0;
+      const pct = tot ? Math.round((done / tot) * 100) : 0;
+      if (cat.bar[k]) { cat.bar[k].max = Math.max(tot,1); cat.bar[k].value = Math.min(done, tot); }
+      if (cat.pct[k]) cat.pct[k].textContent = pct + '%';
+      if (perResult && perResult[k]) {
+        if (cat.ins[k]) cat.ins[k].textContent = perResult[k].inserted || 0;
+        if (cat.upd[k]) cat.upd[k].textContent = perResult[k].updated || 0;
+        if (cat.skp[k]) cat.skp[k].textContent = perResult[k].skipped || 0;
+      }
+    });
+  }
+
+  function addLog(msg){
+    const box = $('log'); if (!box) return;
+    const ts = new Date().toLocaleTimeString();
+    box.textContent += `[${ts}] ${msg}\n`;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  let es;
+  function attachSSE(){
+    if (es) { try { es.close(); } catch(e){} }
+    es = new EventSource('/api/import/stream');
+
+    es.onopen = ()=> addLog('[SSE] ansluten');
+
+    es.onmessage = (ev)=>{
+      try {
+        const m = JSON.parse(ev.data);
+        if (!m || !m.phase) return;
+
+        switch (m.phase) {
+          case 'connected': addLog('[SSE] connected'); break;
+          case 'health':
+            if (m.step==='scan:done'){
+              perTotals.images = m.images||0;
+              perTotals.pdfs   = m.pdfs||0;
+              perTotals.ppts   = m.ppts||0;
+              perTotals.music  = m.music||0;
+              updateCatProgress({images:0,pdfs:0,ppts:0,music:0}, {images:{inserted:0,updated:0,skipped:0},pdfs:{inserted:0,updated:0,skipped:0},ppts:{inserted:0,updated:0,skipped:0},music:{inserted:0,updated:0,skipped:0}});
+            }
+            break;
+          case 'start':
+            $('abort').disabled = false;
+            addLog('[Start] total=' + (m.total||0));
+            break;
+          case 'processing':
+            addLog(`[Processing] ${m.type||''} → ${m.file||''}`);
+            break;
+          case 'processed':
+            updateCatProgress(m.perDone, m.perResult);
+            break;
+          case 'tick':
+            if (m.metrics) updateETA(m.metrics);
+            if (m.perDone || m.perResult) updateCatProgress(m.perDone, m.perResult);
+            break;
+          case 'error':
+            addLog('❌ Fel: ' + (m.message||'') + ' (' + (m.file||'') + ')');
+            break;
+          case 'aborting':
+            addLog('Avbryter...');
+            break;
+          case 'aborted':
+            $('abort').disabled = true;
+            updateETA(null);
+            addLog('Import avbruten!');
+            if (m.summary) addLog('[Summering] ' + JSON.stringify(m.summary));
+            break;
+          case 'done':
+            $('abort').disabled = true;
+            updateETA(null);
+            addLog('Klart');
+            if (m.summary) addLog('[Summering] ' + JSON.stringify(m.summary));
+            break;
+          case 'fatal':
+            $('abort').disabled = true;
+            updateETA(null);
+            addLog('Fatalt fel: ' + (m.message||''));
+            break;
+        }
+      } catch(e) {
+        addLog('[SSE parse] ' + e.message);
+      }
+    };
+
+    es.addEventListener('ping', ()=>{ /* heartbeat */ });
+    es.onerror = ()=> addLog('[SSE] fel (nätverk/server)');
+  }
+
+  // Visa start-knappen
+  window.__attachSSE = attachSSE;
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attachSSE);
+  } else {
+    attachSSE();
+  }
+})();
+</script>
+
+</body>
+</html>

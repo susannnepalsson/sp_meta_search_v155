@@ -1,0 +1,78 @@
+-- Skapa databas
+CREATE DATABASE IF NOT EXISTS sp_meta_search
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_0900_ai_ci;
+
+USE sp_meta_search;
+
+-- Tabell för bilder
+CREATE TABLE IF NOT EXISTS sp_image (
+  Id INT NOT NULL AUTO_INCREMENT,
+  FileName VARCHAR(512) NOT NULL,
+  FullPath VARCHAR(2048) NOT NULL,
+  MimeType VARCHAR(128) NOT NULL,
+  SizeBytes BIGINT NOT NULL,
+  LastWriteTimeUtc DATETIME NOT NULL,
+  Sha256 VARCHAR(64) NOT NULL,
+  Width INT DEFAULT NULL,
+  Height INT DEFAULT NULL,
+  Latitude DOUBLE DEFAULT NULL,
+  Longitude DOUBLE DEFAULT NULL,
+  CameraMake VARCHAR(128) DEFAULT NULL,
+  CameraModel VARCHAR(128) DEFAULT NULL,
+  PRIMARY KEY (Id),
+  UNIQUE KEY uq_sp_image_sha (Sha256),
+  KEY IX_sp_image_file (FileName)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- Tabell för PDF-filer
+CREATE TABLE IF NOT EXISTS sp_pdf (
+  Id INT NOT NULL AUTO_INCREMENT,
+  FileName VARCHAR(512) NOT NULL,
+  FullPath VARCHAR(2048) NOT NULL,
+  MimeType VARCHAR(128) NOT NULL,
+  SizeBytes BIGINT NOT NULL,
+  LastWriteTimeUtc DATETIME NOT NULL,
+  Sha256 VARCHAR(64) NOT NULL,
+  PageCount INT DEFAULT NULL,
+  PRIMARY KEY (Id),
+  UNIQUE KEY uq_sp_pdf_sha (Sha256),
+  KEY IX_sp_pdf_file (FileName)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- Tabell för PowerPoint-filer
+CREATE TABLE IF NOT EXISTS sp_ppt (
+  Id INT NOT NULL AUTO_INCREMENT,
+  FileName VARCHAR(512) NOT NULL,
+  FullPath VARCHAR(2048) NOT NULL,
+  MimeType VARCHAR(128) NOT NULL,
+  SizeBytes BIGINT NOT NULL,
+  LastWriteTimeUtc DATETIME NOT NULL,
+  Sha256 VARCHAR(64) NOT NULL,
+  SlideCount INT DEFAULT NULL,
+  PRIMARY KEY (Id),
+  UNIQUE KEY uq_sp_ppt_sha (Sha256),
+  KEY IX_sp_ppt_file (FileName)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- Tabell för musikfiler (MP3)
+CREATE TABLE IF NOT EXISTS sp_music (
+  Id INT NOT NULL AUTO_INCREMENT,
+  FileName VARCHAR(512) NOT NULL,
+  FullPath VARCHAR(2048) NOT NULL,
+  MimeType VARCHAR(128) NOT NULL,
+  SizeBytes BIGINT NOT NULL,
+  LastWriteTimeUtc DATETIME NOT NULL,
+  Sha256 VARCHAR(64) NOT NULL,
+  BitrateKbps INT DEFAULT NULL,
+  DurationSeconds INT DEFAULT NULL,
+  Title VARCHAR(256) DEFAULT NULL,
+  Artist VARCHAR(256) DEFAULT NULL,
+  Album VARCHAR(256) DEFAULT NULL,
+  PRIMARY KEY (Id),
+  UNIQUE KEY uq_sp_music_sha (Sha256),
+  KEY IX_sp_music_file (FileName)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

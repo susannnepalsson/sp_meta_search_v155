@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Search - sp_meta_search (JS v3)</title>
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>Meta Sök</h1>
+  <nav>
+    <a href="/search.html">Sök</a>
+    <a href="/upload.html">Ladda upp filer</a> 
+    <a href="/import.html">Importera metadata till databasen</a> 
+  </nav>
+</header>
+<main class="container">
+  <h2>Sök</h2>
+  <div class="row">
+    <input id="q" placeholder="Sök på filnamn" />
+    <select id="domain">
+      <option value="">Alla</option>
+      <option value="image">Images</option>
+      <option value="pdf">PDF</option>
+      <option value="ppt">PPT</option>
+      <option value="music">Music</option>
+    </select>
+    <input id="dateFrom" type="date" placeholder="Från-datum (UTC)" />
+    <input id="dateTo" type="date" placeholder="Till-datum (UTC)" />
+    <span id="imageExtra" style="display:none">
+      <input id="cameraMake" placeholder="Camera Make" />
+      <input id="cameraModel" placeholder="Camera Model" />
+    </span>
+    <span id="musicExtra" style="display:none">
+      <input id="title" placeholder="Title" />
+      <input id="artist" placeholder="Artist" />
+      <input id="album" placeholder="Album" />
+    </span>
+    
+    <select id="sort">
+      <option value="Id">Id</option>
+      <option value="FileName">FileName</option>
+      <option value="SizeBytes">Size</option>
+      <option value="LastWriteTimeUtc">LastWrite</option>
+    </select>
+    <select id="dir">
+      <option value="desc">DESC</option>
+      <option value="asc">ASC</option>
+    </select>
+    <select id="pageSize">
+      <option>25</option><option selected>50</option><option>100</option><option>200</option>
+    </select>
+    <button id="go">Search</button>
+  </div>
+  <div id="results"></div>
+  <div class="pager">
+    <button id="prev">Prev</button>
+    <span id="pageInfo"></span>
+    <button id="next">Next</button>
+  </div>
+</main>
+<script>
+let page = 1;
+function updateFields(){
+  const d = document.getElementById('domain').value || '';
+  const music = document.getElementById('musicExtra');
+  const image = document.getElementById('imageExtra');
+  if (music) music.style.display = (d === 'music') ? '' : 'none';
+  if (image) image.style.display = (d === 'image') ? '' : 'none';
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  const domSel = document.getElementById('domain');
+  if (domSel) domSel.addEventListener('change', updateFields);
+  updateFields();
+});
+async function run(){
+  const fileName = document.getElementById('q').value || '';
+  const d = document.getElementById('domain').value || '';
+  const dateFrom = document.getElementById('dateFrom')?.value || '';
+  const dateTo = document.getElementById('dateTo')?.value || '';
+  const sort = document.getElementById('sort').value;
+  const dir = document.getElementById('dir').value;
+  const pageSize = document.getElementById('pageSize').value;
+
+  const params = new URLSearchParams({ domain: d, page: String(page), pageSize: String(pageSize), sort, dir });
+  if (fileName) params.set('fileName', fileName);
+  if (dateFrom) params.set('dateFrom', dateFrom);
+  if (dateTo) params.set('dateTo', dateTo);
+  if (d === 'music') {
+    const title = document.getElementById('title')?.value || '';
+    const artist = document.getElementById('artist')?.value || '';
+    const album = document.getElementById('album')?.value || '';
+    if (title) params.set('title', title);
+    if (artist) params.set('artist', artist);
+    if (album) params.set('album', album);
+  }
+  if (d === 'image') {
+    const cameraMake = document.getElementById('cameraMake')?.value || '';
+    const cameraModel = document.getElementById('cameraModel')?.value || '';
+    if (cameraMake) params.set('cameraMake', cameraMake);
+    if (cameraModel) params.set('cameraModel', cameraModel);
+  }
+  const url = `/api/search?${params.toString()}`;
+  const r = await fetch(url);
+  const data = await r.json();
+  const el = document.getElementById('results');
+  el.innerHTML = '';
+
+  function humanSize(n){ if(n==null) return ''; const units=['B','KB','MB','GB','TB']; let i=0,x=Number(n); while(x>=1024 && i<units.length-1){x/=1024;i++;} return x.toFixed(1)+' '+units[i]; }
+  function filesLink(fullPath){ const rel = '/files/' + fullPath.replaceAll('\\','/').split('/meta_files/')[1]; return rel; }
+  function fmtDate(dt){ if(!dt) return ''; try{ const d=new Date(dt); if(isNaN(d)) return dt; return d.toISOString().slice(0,19).replace('T',' ');}catch{ return dt; } }
+  function fmtDur(sec){ if(!sec&&sec!==0) return ''; const s=Number(sec); const m=Math.floor(s/60); const ss=String(s%60).padStart(2,'0'); return `${m}:${ss}`; }
+
+  // Images
+  if(data.images && data.images.items && data.images.items.length){
+    el.innerHTML += '<h3>Images</h3>';
+    const g = document.createElement('div'); g.className = 'grid';
+    for(const it of data.images.items){
+      const href = filesLink(it.FullPath);
+      const mapLink = (it.Latitude!=null && it.Longitude!=null) ? `<a target="_blank" href="https://www.google.com/maps?q=${it.Latitude},${it.Longitude}">Open in Maps</a>` : '';
+      const dims = (it.Width!=null && it.Height!=null) ? `${it.Width}×${it.Height}` : '';
+      const cam = [it.CameraMake||'', it.CameraModel||''].filter(Boolean).join(' ');
+      const date = fmtDate(it.LastWriteTimeUtc);
+      const metaLines = [
+        `<strong>${it.FileName}</strong>`,
+        [humanSize(it.SizeBytes), dims].filter(Boolean).join(' · '),
+        [cam, mapLink].filter(Boolean).join(' · '),
+        date ? `LastWrite: ${date}` : ''
+      ].filter(Boolean).join('<br>');
+      const card = document.createElement('div'); card.className='card';
+      card.innerHTML = `<a href="${href}" target="_blank"><img src="${href}" loading="lazy" /></a>
+        <div class="meta">${metaLines}</div>`;
+      g.appendChild(card);
+    }
+    el.appendChild(g);
+  }
+
+  // PDFs
+  if(data.pdfs && data.pdfs.items && data.pdfs.items.length){
+    el.innerHTML += '<h3>PDF</h3>';
+    const g = document.createElement('div'); g.className='grid';
+    for(const it of data.pdfs.items){
+      const href = filesLink(it.FullPath);
+      const date = fmtDate(it.LastWriteTimeUtc);
+      const card = document.createElement('div'); card.className='card';
+      card.innerHTML = `<a href="${href}" target="_blank"><canvas width="320" height="240"></canvas></a>
+        <div class="meta"><strong>${it.FileName}</strong><br>${humanSize(it.SizeBytes)} · ${it.PageCount??''} pages<br>${date?`LastWrite: ${date}`:''}</div>`;
+      g.appendChild(card);
+    }
+    el.appendChild(g);
+  }
+
+  // PPTs
+  if(data.ppts && data.ppts.items && data.ppts.items.length){
+    el.innerHTML += '<h3>PPT</h3>';
+    const g = document.createElement('div'); g.className='grid';
+    for(const it of data.ppts.items){
+      const href = filesLink(it.FullPath);
+      const date = fmtDate(it.LastWriteTimeUtc);
+      const card = document.createElement('div'); card.className='card';
+      card.innerHTML = `<a href="${href}" target="_blank"><div class="ppt-thumb">PPT</div></a>
+        <div class="meta"><strong>${it.FileName}</strong><br>${humanSize(it.SizeBytes)} · ${it.SlideCount??''} slides<br>${date?`LastWrite: ${date}`:''}</div>`;
+      g.appendChild(card);
+    }
+    el.appendChild(g);
+  }
+
+  // Music
+  if(data.music && data.music.items && data.music.items.length){
+    el.innerHTML += '<h3>Music</h3>';
+    const t = document.createElement('table'); t.className='table';
+    t.innerHTML = '<tr><th>Title</th><th>Artist</th><th>Album</th><th>File</th><th>Duration</th><th>Bitrate</th><th>LastWrite</th><th>Play</th></tr>';
+    t.innerHTML += data.music.items.map(it=>{
+      const href = filesLink(it.FullPath);
+      return `<tr>
+        <td>${it.Title??''}</td>
+        <td>${it.Artist??''}</td>
+        <td>${it.Album??''}</td>
+        <td>${it.FileName}</td>
+        <td>${fmtDur(it.DurationSeconds)}</td>
+        <td>${it.BitrateKbps??''}</td>
+        <td>${fmtDate(it.LastWriteTimeUtc)}</td>
+        <td><audio controls src="${href}"></audio></td>
+      </tr>`;
+    }).join('');
+    el.appendChild(t);
+  }
+}
+
+document.getElementById('go').addEventListener('click', ()=>{ page=1; run(); });
+document.getElementById('prev').addEventListener('click', ()=>{ if(page>1){page--; run();} });
+document.getElementById('next').addEventListener('click', ()=>{ page++; run(); });
+</script>
+</body>
+</html>
