@@ -1,4 +1,4 @@
-# 📘 Meta File Search (sp_meta_search_v154)
+# Meta File Search (sp_meta_search_v155)
 
 ## Översikt
 
@@ -257,7 +257,7 @@ Importflödet använder **Server-Sent Events**:
 
 ## Sammanfattning
 
-**Meta File Search v154** erbjuder:
+**Meta File Search v155** erbjuder:
 
 - Automatisk filscanning och metadataimport  
 - Realtidsloggning av förlopp per kategori  
